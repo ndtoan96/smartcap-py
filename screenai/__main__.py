@@ -17,6 +17,7 @@ from PySide6.QtGui import (
 )
 import sys
 from PIL import ImageGrab
+from time import sleep
 
 
 class OverlayWindow(QWidget):
@@ -70,6 +71,19 @@ class OverlayWindow(QWidget):
             self.promptWindow = PromptWindow(self.startPos, self.endPos)
 
 
+class Worker(QtCore.QObject):
+    finished = QtCore.Signal(str)
+
+    def __init__(self, picture: QPixmap, prompt: str = ""):
+        super().__init__()
+        self.picture = picture
+        self.prompt = prompt
+
+    def run(self):
+        sleep(2)
+        self.finished.emit("This is a test answer")
+
+
 class PromptWindow(QWidget):
     def __init__(self, startPos: QtCore.QPointF, endPos: QtCore.QPointF):
         super().__init__()
@@ -101,8 +115,27 @@ class PromptWindow(QWidget):
         self.show()
 
     def sendPrompt(self):
-        self.sendButton.setDisabled(True)
-        print(self.promptTextEdit.toPlainText())
+        self.promptTextEdit.setDisabled(True)
+        self.sendButton.hide()
+
+        # Use threading to prevent blocking the UI
+        self.thread = QtCore.QThread()
+        self.worker = Worker(
+            picture=self.screenshot, prompt=self.promptTextEdit.toPlainText()
+        )
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.showAnswer)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        self.thread.start()
+
+    def showAnswer(self, answer: str):
+        self.answer = QLabel(answer, self)
+        self.answer.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        self.layout().addWidget(self.answer)
 
 
 if __name__ == "__main__":
