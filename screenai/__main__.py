@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QLabel, QTextEdit
 from PySide6 import QtCore
 from PySide6.QtGui import QMouseEvent, QPainter, QPixmap, QColor
 import sys
+from PIL import ImageGrab
 
 
 class Window(QWidget):
@@ -51,6 +52,17 @@ class Window(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent):
         if self.endPos is None:
             self.endPos = event.position()
+
+            self.screenshot = ImageGrab.grab(
+                all_screens=True,
+                bbox=[
+                    self.startPos.x(),
+                    self.startPos.y(),
+                    self.endPos.x(),
+                    self.endPos.y(),
+                ],
+            ).toqpixmap()
+            QApplication.restoreOverrideCursor()
 
 
 if __name__ == "__main__":
