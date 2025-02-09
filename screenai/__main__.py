@@ -1,14 +1,30 @@
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QTextEdit
+from PySide6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QLabel,
+    QVBoxLayout,
+    QTextEdit,
+    QPushButton,
+)
 from PySide6 import QtCore
-from PySide6.QtGui import QMouseEvent, QPainter, QPixmap, QColor
+from PySide6.QtGui import (
+    QMouseEvent,
+    QPainter,
+    QPixmap,
+    QColor,
+    QShortcut,
+    QKeySequence,
+)
 import sys
 from PIL import ImageGrab
 
 
-class Window(QWidget):
+class OverlayWindow(QWidget):
     def __init__(self, size: QtCore.QSize):
         super().__init__()
         QApplication.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
+
+        self.setWindowTitle("ScreenAI Overlay")
 
         self.startPos = None
         self.endPos = None
@@ -26,9 +42,6 @@ class Window(QWidget):
         self.pixmap = QPixmap(size.width(), size.height())
         self.pixmap.fill(QColor(0, 0, 0, 100))
         self.overlay.setPixmap(self.pixmap)
-
-        self.prompt = QTextEdit(self)
-        self.prompt.hide()
 
         self.show()
 
@@ -52,21 +65,48 @@ class Window(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent):
         if self.endPos is None:
             self.endPos = event.position()
-
-            self.screenshot = ImageGrab.grab(
-                all_screens=True,
-                bbox=[
-                    self.startPos.x(),
-                    self.startPos.y(),
-                    self.endPos.x(),
-                    self.endPos.y(),
-                ],
-            ).toqpixmap()
             QApplication.restoreOverrideCursor()
+            self.hide()
+            self.promptWindow = PromptWindow(self.startPos, self.endPos)
+
+
+class PromptWindow(QWidget):
+    def __init__(self, startPos: QtCore.QPointF, endPos: QtCore.QPointF):
+        super().__init__()
+        self.setWindowTitle("ScreenAI")
+        self.screenshot = ImageGrab.grab(
+            all_screens=True,
+            bbox=[
+                min(startPos.x(), endPos.x()),
+                min(startPos.y(), endPos.y()),
+                max(endPos.x(), endPos.x()),
+                max(endPos.y(), endPos.y()),
+            ],
+        ).toqpixmap()
+        layout = QVBoxLayout()
+        self.screenshotLabel = QLabel(self)
+        self.screenshotLabel.setPixmap(self.screenshot)
+        self.promptTextEdit = QTextEdit(self)
+        self.promptTextEdit.setFocus()
+        self.sendButton = QPushButton("Send")
+        self.sendButton.clicked.connect(self.sendPrompt)
+
+        sendShortcut = QShortcut(QKeySequence("Ctrl+Return"), self.promptTextEdit)
+        sendShortcut.activated.connect(self.sendButton.click)
+
+        layout.addWidget(self.screenshotLabel)
+        layout.addWidget(self.promptTextEdit)
+        layout.addWidget(self.sendButton)
+        self.setLayout(layout)
+        self.show()
+
+    def sendPrompt(self):
+        self.sendButton.setDisabled(True)
+        print(self.promptTextEdit.toPlainText())
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     screens = app.screens()
-    window = Window(app.primaryScreen().virtualSize())
+    window = OverlayWindow(app.primaryScreen().virtualSize())
     sys.exit(app.exec())
