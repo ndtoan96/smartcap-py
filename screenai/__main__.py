@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QTextEdit,
     QPushButton,
+    QSystemTrayIcon,
+    QMenu,
 )
 from PySide6 import QtCore
 from PySide6.QtGui import (
@@ -14,6 +16,8 @@ from PySide6.QtGui import (
     QColor,
     QShortcut,
     QKeySequence,
+    QIcon,
+    QAction,
 )
 import sys
 from PIL import ImageGrab
@@ -38,6 +42,8 @@ class OverlayWindow(QWidget):
 
         self.move(0, 0)
         self.resize(size.width(), size.height())
+        quitShortcut = QShortcut(QKeySequence("Esc"), self)
+        quitShortcut.activated.connect(self.close)
 
         self.overlay = QLabel(self)
         self.pixmap = QPixmap(size.width(), size.height())
@@ -138,8 +144,46 @@ class PromptWindow(QWidget):
         self.layout().addWidget(self.answer)
 
 
+class TrayHandler(object):
+    def __init__(self, app: QApplication):
+        self.app = app
+
+    def quitApp(self):
+        self.app.quit()
+
+    def onTrayActivated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.openOverlayWindow()
+
+    def openOverlayWindow(self):
+        self.overlayWindow = OverlayWindow(app.primaryScreen().virtualSize())
+
+    def openConfigureWindow(self):
+        pass
+
+
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    screens = app.screens()
-    window = OverlayWindow(app.primaryScreen().virtualSize())
+    app = QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+
+    tray = QSystemTrayIcon()
+    tray.setIcon(QIcon("eye-icon.svg"))
+    tray.setVisible(True)
+
+    handler = TrayHandler(app)
+
+    tray.activated.connect(handler.onTrayActivated)
+
+    # Create the menu
+    menu = QMenu()
+    quitAction = QAction("Quit")
+    quitAction.triggered.connect(handler.quitApp)
+    captureAction = QAction("Capture")
+    captureAction.triggered.connect(handler.openOverlayWindow)
+    configureAction = QAction("Configure")
+    configureAction.triggered.connect(handler.openConfigureWindow)
+    menu.addActions([captureAction, configureAction, quitAction])
+
+    tray.setContextMenu(menu)
+
     sys.exit(app.exec())
