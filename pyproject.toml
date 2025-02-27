@@ -1,10 +1,7 @@
 [project]
-name = "screenai-py"
+name = "SmartCap"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "pillow>=11.1.0",
-    "pyside6>=6.8.2",
-]
+dependencies = ["pillow>=11.1.0", "pyside6>=6.8.2"]

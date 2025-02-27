@@ -20,37 +20,48 @@ from PySide6.QtGui import (
     QAction,
 )
 import sys
-from PIL import ImageGrab
 from time import sleep
+from typing import Callable
+from PIL import Image, ImageGrab
+from pathlib import Path
 
 
 class OverlayWindow(QWidget):
-    def __init__(self, size: QtCore.QSize):
+    def __init__(
+        self,
+        screen_id: int,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        finishedCallback: Callable,
+        cancelCallback: Callable,
+    ):
         super().__init__()
-        QApplication.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
-
-        self.setWindowTitle("ScreenAI Overlay")
-
+        self.screen_id = screen_id
+        self.finishedCallback = finishedCallback
+        self.cancelCallback = cancelCallback
         self.startPos = None
         self.endPos = None
 
+        self.setWindowTitle("SmartCap")
         self.setWindowFlags(
             QtCore.Qt.WindowType.FramelessWindowHint
             | QtCore.Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
-
-        self.move(0, 0)
-        self.resize(size.width(), size.height())
-        quitShortcut = QShortcut(QKeySequence("Esc"), self)
-        quitShortcut.activated.connect(self.close)
+        self.move(x, y)
+        self.resize(width, height)
+        self.quitShortcut = QShortcut(QKeySequence("Esc"), self)
+        self.quitShortcut.activated.connect(self.cancelCallback)
 
         self.overlay = QLabel(self)
-        self.pixmap = QPixmap(size.width(), size.height())
+        self.pixmap = QPixmap(width, height)
         self.pixmap.fill(QColor(0, 0, 0, 100))
         self.overlay.setPixmap(self.pixmap)
 
         self.show()
+        self.activateWindow()
 
     def mousePressEvent(self, event: QMouseEvent):
         if self.startPos is None:
@@ -72,15 +83,14 @@ class OverlayWindow(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent):
         if self.endPos is None:
             self.endPos = event.position()
-            QApplication.restoreOverrideCursor()
             self.hide()
-            self.promptWindow = PromptWindow(self.startPos, self.endPos)
+            self.finishedCallback(self.screen_id, self.startPos, self.endPos)
 
 
 class Worker(QtCore.QObject):
     finished = QtCore.Signal(str)
 
-    def __init__(self, picture: QPixmap, prompt: str = ""):
+    def __init__(self, picture: Image.Image, prompt: str = ""):
         super().__init__()
         self.picture = picture
         self.prompt = prompt
@@ -91,28 +101,22 @@ class Worker(QtCore.QObject):
 
 
 class PromptWindow(QWidget):
-    def __init__(self, startPos: QtCore.QPointF, endPos: QtCore.QPointF):
+    def __init__(self, screenshot: Image.Image):
         super().__init__()
-        self.setWindowTitle("ScreenAI")
-        self.screenshot = ImageGrab.grab(
-            all_screens=True,
-            bbox=[
-                min(startPos.x(), endPos.x()),
-                min(startPos.y(), endPos.y()),
-                max(endPos.x(), endPos.x()),
-                max(endPos.y(), endPos.y()),
-            ],
-        ).toqpixmap()
+        self.screenshot = screenshot
+        self.setWindowTitle("SmartCap")
         layout = QVBoxLayout()
         self.screenshotLabel = QLabel(self)
-        self.screenshotLabel.setPixmap(self.screenshot)
+        self.screenshotLabel.setMaximumSize(800, 640)
+        self.screenshotLabel.setScaledContents(True)
+        self.screenshotLabel.setPixmap(screenshot.toqpixmap())
         self.promptTextEdit = QTextEdit(self)
         self.promptTextEdit.setFocus()
         self.sendButton = QPushButton("Send")
         self.sendButton.clicked.connect(self.sendPrompt)
 
-        sendShortcut = QShortcut(QKeySequence("Ctrl+Return"), self.promptTextEdit)
-        sendShortcut.activated.connect(self.sendButton.click)
+        self.sendShortcut = QShortcut(QKeySequence("Ctrl+Return"), self.promptTextEdit)
+        self.sendShortcut.activated.connect(self.sendButton.click)
 
         layout.addWidget(self.screenshotLabel)
         layout.addWidget(self.promptTextEdit)
@@ -147,6 +151,7 @@ class PromptWindow(QWidget):
 class TrayHandler(object):
     def __init__(self, app: QApplication):
         self.app = app
+        self.overlayWindows = []
 
     def quitApp(self):
         self.app.quit()
@@ -156,7 +161,34 @@ class TrayHandler(object):
             self.openOverlayWindow()
 
     def openOverlayWindow(self):
-        self.overlayWindow = OverlayWindow(app.primaryScreen().virtualSize())
+        QApplication.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
+        for i, screen in enumerate(self.app.screens()):
+            x = screen.geometry().x()
+            y = screen.geometry().y()
+            w = screen.geometry().width()
+            h = screen.geometry().height()
+            self.overlayWindows.append(
+                OverlayWindow(i, x, y, w, h, self.beginPrompt, self.closeAllWindows)
+            )
+
+    def closeAllWindows(self):
+        for window in self.overlayWindows:
+            window.close()
+
+    def beginPrompt(
+        self, screen_id: int, startPos: QtCore.QPointF, endPos: QtCore.QPointF
+    ):
+        QApplication.restoreOverrideCursor()
+        self.closeAllWindows()
+        screen = self.app.screens()[screen_id]
+        x1 = screen.geometry().x() + startPos.x() * screen.devicePixelRatio()
+        y1 = screen.geometry().y() + startPos.y() * screen.devicePixelRatio()
+        x2 = screen.geometry().x() + endPos.x() * screen.devicePixelRatio()
+        y2 = screen.geometry().y() + endPos.y() * screen.devicePixelRatio()
+        screenshot = ImageGrab.grab(
+            (int(x1), int(y1), int(x2), int(y2)), all_screens=True
+        )
+        self.promptWindow = PromptWindow(screenshot)
 
     def openConfigureWindow(self):
         pass
@@ -167,7 +199,8 @@ if __name__ == "__main__":
     app.setQuitOnLastWindowClosed(False)
 
     tray = QSystemTrayIcon()
-    tray.setIcon(QIcon("eye-icon.svg"))
+    iconPath = Path(__file__).parent.parent.joinpath("smartcap_icon.png")
+    tray.setIcon(QIcon(str(iconPath)))
     tray.setVisible(True)
 
     handler = TrayHandler(app)
