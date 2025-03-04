@@ -5,8 +5,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QTextEdit,
     QPushButton,
-    QSystemTrayIcon,
-    QMenu,
 )
 from PySide6 import QtCore
 from PySide6.QtGui import (
@@ -17,7 +15,6 @@ from PySide6.QtGui import (
     QShortcut,
     QKeySequence,
     QIcon,
-    QAction,
 )
 import sys
 from time import sleep
@@ -101,10 +98,12 @@ class Worker(QtCore.QObject):
 
 
 class PromptWindow(QWidget):
-    def __init__(self, screenshot: Image.Image):
+    def __init__(self, iconPath: str, screenshot: Image.Image):
         super().__init__()
         self.screenshot = screenshot
         self.setWindowTitle("SmartCap")
+        icon = QIcon(QPixmap(iconPath))
+        self.setWindowIcon(icon)
         layout = QVBoxLayout()
         self.screenshotLabel = QLabel(self)
         self.screenshotLabel.setMaximumSize(800, 640)
@@ -148,17 +147,12 @@ class PromptWindow(QWidget):
         self.layout().addWidget(self.answer)
 
 
-class TrayHandler(object):
-    def __init__(self, app: QApplication):
+class SmartCapApp(object):
+    def __init__(self, app: QApplication, iconPath: str):
         self.app = app
+        self.iconPath = iconPath
         self.overlayWindows = []
-
-    def quitApp(self):
-        self.app.quit()
-
-    def onTrayActivated(self, reason):
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self.openOverlayWindow()
+        self.openOverlayWindow()
 
     def openOverlayWindow(self):
         QApplication.setOverrideCursor(QtCore.Qt.CursorShape.CrossCursor)
@@ -188,35 +182,11 @@ class TrayHandler(object):
         screenshot = ImageGrab.grab(
             (int(x1), int(y1), int(x2), int(y2)), all_screens=True
         )
-        self.promptWindow = PromptWindow(screenshot)
-
-    def openConfigureWindow(self):
-        pass
+        self.promptWindow = PromptWindow(iconPath, screenshot)
 
 
 if __name__ == "__main__":
     app = QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-
-    tray = QSystemTrayIcon()
     iconPath = Path(__file__).parent.parent.joinpath("smartcap_icon.png")
-    tray.setIcon(QIcon(str(iconPath)))
-    tray.setVisible(True)
-
-    handler = TrayHandler(app)
-
-    tray.activated.connect(handler.onTrayActivated)
-
-    # Create the menu
-    menu = QMenu()
-    quitAction = QAction("Quit")
-    quitAction.triggered.connect(handler.quitApp)
-    captureAction = QAction("Capture")
-    captureAction.triggered.connect(handler.openOverlayWindow)
-    configureAction = QAction("Configure")
-    configureAction.triggered.connect(handler.openConfigureWindow)
-    menu.addActions([captureAction, configureAction, quitAction])
-
-    tray.setContextMenu(menu)
-
+    smartcap = SmartCapApp(app, iconPath)
     sys.exit(app.exec())
