@@ -1,10 +1,17 @@
+import json
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
     QLabel,
     QVBoxLayout,
+    QGridLayout,
+    QComboBox,
     QTextEdit,
     QPushButton,
+    QTabWidget,
+    QLineEdit,
+    QRadioButton,
+    QHBoxLayout,
 )
 from PySide6 import QtCore
 from PySide6.QtGui import (
@@ -97,13 +104,10 @@ class Worker(QtCore.QObject):
         self.finished.emit("This is a test answer")
 
 
-class PromptWindow(QWidget):
-    def __init__(self, iconPath: str, screenshot: Image.Image):
+class PromptWidget(QWidget):
+    def __init__(self, screenshot: Image.Image):
         super().__init__()
         self.screenshot = screenshot
-        self.setWindowTitle("SmartCap")
-        icon = QIcon(QPixmap(iconPath))
-        self.setWindowIcon(icon)
         layout = QVBoxLayout()
         self.screenshotLabel = QLabel(self)
         self.screenshotLabel.setMaximumSize(800, 640)
@@ -121,7 +125,6 @@ class PromptWindow(QWidget):
         layout.addWidget(self.promptTextEdit)
         layout.addWidget(self.sendButton)
         self.setLayout(layout)
-        self.show()
 
     def sendPrompt(self):
         self.promptTextEdit.setDisabled(True)
@@ -145,6 +148,99 @@ class PromptWindow(QWidget):
         self.answer = QLabel(answer, self)
         self.answer.setTextFormat(QtCore.Qt.TextFormat.RichText)
         self.layout().addWidget(self.answer)
+
+
+class ConfigValues(object):
+    def __init__(self, path: str | Path):
+        self.path = path
+        if path.exists():
+            data = json.load(open(path, "r"))
+            self.provider = data["provider"]
+            self.model = data["model"]
+            self.apiKey = data["api-key"]
+            self.systemPrompt = data["system-prompt"]
+        else:
+            self.provider = "Google"
+            self.model = "gemini-2.0-flash"
+            self.apiKey = ""
+            self.systemPrompt = "You are a helpful assistant"
+            self.path.parent.mkdir(parents=True)
+            self.save()
+
+    def setProvider(self, provider: str):
+        self.provider = provider
+        self.save()
+
+    def setModel(self, model: str):
+        self.model = model
+        self.save()
+
+    def setApiKey(self, apiKey: str):
+        self.apiKey = apiKey
+        self.save()
+
+    def setSystemPrompt(self, systemPrompt: str):
+        self.systemPrompt = systemPrompt
+        self.save()
+
+    def save(self):
+        data = {
+            "provider": self.provider,
+            "model": self.model,
+            "api-key": self.apiKey,
+            "system-prompt": self.systemPrompt,
+        }
+        json.dump(data, open(self.path, "w"))
+
+
+class ConfigWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        configPath = Path.home().joinpath(".smartcap/config.json")
+        self.config = ConfigValues(configPath)
+
+        providerLabel = QLabel("Provider:")
+        providerInput = QComboBox()
+        providerInput.addItem("Google")
+        providerInput.setCurrentText(self.config.provider)
+        providerInput.currentTextChanged.connect(lambda p: self.config.setProvider(p))
+        modelLabel = QLabel("Model:")
+        modelInput = QLineEdit(self.config.model)
+        modelInput.textChanged.connect(lambda text: self.config.setModel(text))
+        apiKeyLabel = QLabel("API Key:")
+        apiKeyInput = QLineEdit(
+            self.config.apiKey, echoMode=QLineEdit.EchoMode.Password
+        )
+        apiKeyInput.textChanged.connect(lambda text: self.config.setApiKey(text))
+        apiKeyShowButton = QRadioButton("show")
+        apiKeyShowButton.toggled.connect(
+            lambda enabled: apiKeyInput.setEchoMode(
+                QLineEdit.EchoMode.Normal if enabled else QLineEdit.EchoMode.Password
+            )
+        )
+        apiKeyInputLayout = QHBoxLayout()
+        apiKeyInputLayout.addWidget(apiKeyInput)
+        apiKeyInputLayout.addWidget(apiKeyShowButton)
+        grid = QGridLayout()
+        grid.addWidget(providerLabel, 0, 0)
+        grid.addWidget(providerInput, 0, 1)
+        grid.addWidget(modelLabel, 1, 0)
+        grid.addWidget(modelInput, 1, 1)
+        grid.addWidget(apiKeyLabel, 2, 0)
+        grid.addLayout(apiKeyInputLayout, 2, 1)
+
+        systemPromptLabel = QLabel("System prompt:")
+        systemPromptInput = QTextEdit(self.config.systemPrompt)
+        systemPromptInput.textChanged.connect(
+            lambda text: self.config.setSystemPrompt(text)
+        )
+
+        verticleLayout = QVBoxLayout()
+        verticleLayout.addLayout(grid)
+        verticleLayout.addWidget(systemPromptLabel)
+        verticleLayout.addWidget(systemPromptInput)
+        self.setLayout(verticleLayout)
+        self.show()
 
 
 class SmartCapApp(object):
@@ -182,7 +278,14 @@ class SmartCapApp(object):
         screenshot = ImageGrab.grab(
             (int(x1), int(y1), int(x2), int(y2)), all_screens=True
         )
-        self.promptWindow = PromptWindow(iconPath, screenshot)
+        self.promptWidget = PromptWidget(screenshot)
+        self.configWidget = ConfigWidget()
+        self.appWindow = QTabWidget()
+        self.appWindow.setWindowTitle("SmartCap")
+        self.appWindow.setWindowIcon(QIcon(QPixmap(self.iconPath)))
+        self.appWindow.addTab(self.promptWidget, "Prompt")
+        self.appWindow.addTab(self.configWidget, "Config")
+        self.appWindow.show()
 
 
 if __name__ == "__main__":
