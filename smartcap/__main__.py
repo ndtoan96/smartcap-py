@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QRadioButton,
     QHBoxLayout,
+    QSizePolicy,
 )
 from PySide6 import QtCore
 from PySide6.QtGui import (
@@ -152,7 +153,10 @@ class Worker(QtCore.QObject):
                 model=self.config.model,
                 contents=[self.picture, self.prompt],
                 config=GenerateContentConfig(
-                    system_instruction=self.config.systemPrompt
+                    system_instruction=[
+                        self.config.systemPrompt,
+                    ],
+                    temperature=0.1,
                 ),
             )
         self.finished.emit(response.text)
@@ -163,9 +167,9 @@ class PromptWidget(QWidget):
         super().__init__()
         self.config = config
         self.screenshot = screenshot
-        layout = QVBoxLayout()
+        vLayout = QVBoxLayout()
         self.screenshotLabel = QLabel(self)
-        self.screenshotLabel.setMaximumSize(800, 640)
+        self.screenshotLabel.setMaximumWidth(500)
         self.screenshotLabel.setScaledContents(True)
         self.screenshotLabel.setPixmap(screenshot.toqpixmap())
         self.promptTextEdit = QTextEdit(self)
@@ -176,14 +180,28 @@ class PromptWidget(QWidget):
         self.sendShortcut = QShortcut(QKeySequence("Ctrl+Return"), self.promptTextEdit)
         self.sendShortcut.activated.connect(self.sendButton.click)
 
-        layout.addWidget(self.screenshotLabel)
-        layout.addWidget(self.promptTextEdit)
-        layout.addWidget(self.sendButton)
-        self.setLayout(layout)
+        vLayout.addWidget(self.screenshotLabel)
+        vLayout.addWidget(self.promptTextEdit)
+        vLayout.addWidget(self.sendButton)
+
+        hLayout = QHBoxLayout()
+        hLayout.addLayout(vLayout)
+        self.answer = QTextEdit(readOnly=True)
+        self.answer.setMinimumWidth(300)
+        sizePolicy = QSizePolicy()
+        sizePolicy.setHorizontalPolicy(QSizePolicy.Expanding)
+        sizePolicy.setVerticalPolicy(QSizePolicy.Expanding)
+        self.answer.setSizePolicy(sizePolicy)
+        self.answer.setAlignment(QtCore.Qt.AlignTop)
+        subVLayout = QVBoxLayout()
+        subVLayout.addWidget(self.answer)
+        hLayout.addLayout(subVLayout)
+
+        self.setLayout(hLayout)
 
     def sendPrompt(self):
         self.promptTextEdit.setDisabled(True)
-        self.sendButton.hide()
+        self.sendButton.setDisabled(True)
 
         # Use threading to prevent blocking the UI
         self.thread = QtCore.QThread()
@@ -202,9 +220,9 @@ class PromptWidget(QWidget):
         self.thread.start()
 
     def showAnswer(self, answer: str):
-        self.answer = QLabel(answer, self)
-        self.answer.setTextFormat(QtCore.Qt.TextFormat.RichText)
-        self.layout().addWidget(self.answer)
+        self.answer.setMarkdown(answer)
+        self.promptTextEdit.setEnabled(True)
+        self.sendButton.setEnabled(True)
 
 
 class ConfigWidget(QWidget):
@@ -297,6 +315,7 @@ class SmartCapApp(object):
         self.appWindow = QTabWidget()
         self.appWindow.setWindowTitle("SmartCap")
         self.appWindow.setWindowIcon(QIcon(QPixmap(self.iconPath)))
+        self.appWindow.setBaseSize(800, 640)
         self.appWindow.addTab(self.promptWidget, "Prompt")
         self.appWindow.addTab(self.configWidget, "Config")
         self.appWindow.show()
