@@ -24,10 +24,52 @@ from PySide6.QtGui import (
     QIcon,
 )
 import sys
-from time import sleep
 from typing import Callable
 from PIL import Image, ImageGrab
 from pathlib import Path
+
+
+class ConfigValues(object):
+    def __init__(self, path: str | Path):
+        self.path = path
+        if path.exists():
+            data = json.load(open(path, "r"))
+            self.provider = data["provider"]
+            self.model = data["model"]
+            self.apiKey = data["api-key"]
+            self.systemPrompt = data["system-prompt"]
+        else:
+            self.provider = "Google"
+            self.model = "gemini-2.0-flash"
+            self.apiKey = ""
+            self.systemPrompt = "You are a helpful assistant"
+            self.path.parent.mkdir(parents=True)
+            self.save()
+
+    def setProvider(self, provider: str):
+        self.provider = provider
+        self.save()
+
+    def setModel(self, model: str):
+        self.model = model
+        self.save()
+
+    def setApiKey(self, apiKey: str):
+        self.apiKey = apiKey
+        self.save()
+
+    def setSystemPrompt(self, systemPrompt: str):
+        self.systemPrompt = systemPrompt
+        self.save()
+
+    def save(self):
+        data = {
+            "provider": self.provider,
+            "model": self.model,
+            "api-key": self.apiKey,
+            "system-prompt": self.systemPrompt,
+        }
+        json.dump(data, open(self.path, "w"))
 
 
 class OverlayWindow(QWidget):
@@ -94,19 +136,32 @@ class OverlayWindow(QWidget):
 class Worker(QtCore.QObject):
     finished = QtCore.Signal(str)
 
-    def __init__(self, picture: Image.Image, prompt: str = ""):
+    def __init__(self, config: ConfigValues, picture: Image.Image, prompt: str = ""):
         super().__init__()
         self.picture = picture
         self.prompt = prompt
+        self.config = config
 
     def run(self):
-        sleep(2)
-        self.finished.emit("This is a test answer")
+        if self.config.provider == "Google":
+            from google import genai
+            from google.genai.types import GenerateContentConfig
+
+            client = genai.Client(api_key=self.config.apiKey)
+            response = client.models.generate_content(
+                model=self.config.model,
+                contents=[self.picture, self.prompt],
+                config=GenerateContentConfig(
+                    system_instruction=self.config.systemPrompt
+                ),
+            )
+        self.finished.emit(response.text)
 
 
 class PromptWidget(QWidget):
-    def __init__(self, screenshot: Image.Image):
+    def __init__(self, screenshot: Image.Image, config: ConfigValues):
         super().__init__()
+        self.config = config
         self.screenshot = screenshot
         layout = QVBoxLayout()
         self.screenshotLabel = QLabel(self)
@@ -133,7 +188,9 @@ class PromptWidget(QWidget):
         # Use threading to prevent blocking the UI
         self.thread = QtCore.QThread()
         self.worker = Worker(
-            picture=self.screenshot, prompt=self.promptTextEdit.toPlainText()
+            config=self.config,
+            picture=self.screenshot,
+            prompt=self.promptTextEdit.toPlainText(),
         )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
@@ -148,49 +205,6 @@ class PromptWidget(QWidget):
         self.answer = QLabel(answer, self)
         self.answer.setTextFormat(QtCore.Qt.TextFormat.RichText)
         self.layout().addWidget(self.answer)
-
-
-class ConfigValues(object):
-    def __init__(self, path: str | Path):
-        self.path = path
-        if path.exists():
-            data = json.load(open(path, "r"))
-            self.provider = data["provider"]
-            self.model = data["model"]
-            self.apiKey = data["api-key"]
-            self.systemPrompt = data["system-prompt"]
-        else:
-            self.provider = "Google"
-            self.model = "gemini-2.0-flash"
-            self.apiKey = ""
-            self.systemPrompt = "You are a helpful assistant"
-            self.path.parent.mkdir(parents=True)
-            self.save()
-
-    def setProvider(self, provider: str):
-        self.provider = provider
-        self.save()
-
-    def setModel(self, model: str):
-        self.model = model
-        self.save()
-
-    def setApiKey(self, apiKey: str):
-        self.apiKey = apiKey
-        self.save()
-
-    def setSystemPrompt(self, systemPrompt: str):
-        self.systemPrompt = systemPrompt
-        self.save()
-
-    def save(self):
-        data = {
-            "provider": self.provider,
-            "model": self.model,
-            "api-key": self.apiKey,
-            "system-prompt": self.systemPrompt,
-        }
-        json.dump(data, open(self.path, "w"))
 
 
 class ConfigWidget(QWidget):
@@ -278,8 +292,8 @@ class SmartCapApp(object):
         screenshot = ImageGrab.grab(
             (int(x1), int(y1), int(x2), int(y2)), all_screens=True
         )
-        self.promptWidget = PromptWidget(screenshot)
         self.configWidget = ConfigWidget()
+        self.promptWidget = PromptWidget(screenshot, config=self.configWidget.config)
         self.appWindow = QTabWidget()
         self.appWindow.setWindowTitle("SmartCap")
         self.appWindow.setWindowIcon(QIcon(QPixmap(self.iconPath)))
