@@ -9,3 +9,8 @@ dependencies = [
     "pillow>=11.1.0",
     "pyside6>=6.8.2",
 ]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.12.0",
+]
