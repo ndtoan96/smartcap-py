@@ -1,6 +1,7 @@
 Screenshot and send picture to AI.
 
-This app was tested on Windows. It may, in theory, also work on MacOS and Linux X11 but that has not been verified.
+This app was tested on Windows. It may, in theory, also work on MacOS and Linux
+X11 but that has not been verified.
 
 ## Demo
 
@@ -8,16 +9,24 @@ https://github.com/user-attachments/assets/0ef76b38-4e4c-4168-b222-d1f37dfcd3a3
 
 ## Installation
 
-### Python
+### pip
 
 ```bash
 pip install git+https://github.com/ndtoan96/smartcap-py.git
 ```
 
+### uv
+
+```bash
+uv tool install git+https://github.com/ndtoan96/smartcap-py.git
+```
+
 ### Prebuilt binary
 
 You can download prebuilt binary from the
-[release](https://github.com/ndtoan96/smartcap-py/releases) page.
+[release](https://github.com/ndtoan96/smartcap-py/releases) page. Note that the
+startup time of prebuilt binary is way slower than running in a python
+environment.
 
 ## Setup
 
@@ -31,7 +40,7 @@ key.
 ## Usage
 
 Run the executable directly. Or if you install from pip, run
-`python -m smartcap`.
+`python -m smartcap`. In case of uv, run `uv tool run smartcap`.
 
 ## Tips
 
