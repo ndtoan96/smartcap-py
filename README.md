@@ -1,4 +1,6 @@
-Screenshot and send picture to AI
+Screenshot and send picture to AI.
+
+This app was tested on Windows. It may, in theory, also work on MacOS and Linux X11 but that has not been verified.
 
 ## Demo
 
