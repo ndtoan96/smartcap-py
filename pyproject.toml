@@ -1,16 +1,10 @@
 [project]
-name = "SmartCap"
+name = "smartcap"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "google-genai>=1.5.0",
-    "pillow>=11.1.0",
-    "pyside6>=6.8.2",
-]
+dependencies = ["google-genai>=1.5.0", "pillow>=11.1.0", "pyside6>=6.8.2"]
 
 [dependency-groups]
-dev = [
-    "pyinstaller>=6.12.0",
-]
+dev = ["pyinstaller>=6.12.0"]
