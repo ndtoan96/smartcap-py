@@ -22,7 +22,6 @@ from PySide6.QtGui import (
 )
 from typing import Callable
 from PIL import Image
-from pathlib import Path
 from .config import ConfigValues
 
 
@@ -224,4 +223,3 @@ class ConfigWidget(QWidget):
         verticleLayout.addWidget(systemPromptLabel)
         verticleLayout.addWidget(systemPromptInput)
         self.setLayout(verticleLayout)
-        self.show()
