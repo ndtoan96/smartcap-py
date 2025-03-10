@@ -1,3 +1,5 @@
+# smartcap
+
 Screenshot and send picture to AI.
 
 This app was tested on Windows. It may, in theory, also work on MacOS and Linux
